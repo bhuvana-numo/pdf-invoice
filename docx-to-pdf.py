@@ -1,41 +1,33 @@
 from googleapiclient.discovery import build
-from dotenv import load_dotenv
 from googleapiclient.http import MediaFileUpload
-from google.oauth2 import service_account
+from google.oauth2.service_account import Credentials
 import os
 
-SCOPES = ['https://www.googleapis.com/auth/drive']
-load_dotenv()
-
-# Get credentials path from environment variable
-SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-
-if not SERVICE_ACCOUNT_FILE:
-    raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable not set")
-
-
-
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-drive_service = build('drive', 'v3', credentials=creds)
+SCOPES = ["https://www.googleapis.com/auth/drive"]
+CREDS = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
 def upload_docx(file_path):
-    """Uploads DOCX file to Google Drive."""
-    file_metadata = {
-        'name': 'Invoice',
-        'mimeType': 'application/vnd.google-apps.document'
-    }
-    media = MediaFileUpload(file_path, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-    file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    print(f"Uploaded DOCX File ID: {file.get('id')}")
-    return file.get('id')
+    """Uploads DOCX to Google Drive and returns file ID."""
+    service = build("drive", "v3", credentials=CREDS)
+    file_metadata = {"name": os.path.basename(file_path), "mimeType": "application/vnd.google-apps.document"}
+    media = MediaFileUpload(file_path, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    uploaded_file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+    return uploaded_file.get("id")
 
-def export_pdf(file_id, output_path):
-    """Exports Google Docs file as a PDF."""
-    request = drive_service.files().export_media(fileId=file_id, mimeType='application/pdf')
-    with open(output_path, 'wb') as f:
-        f.write(request.execute())
-    print(f"PDF saved as {output_path}")
+def convert_to_pdf(file_id, output_pdf_path):
+    """Converts Google Docs file to PDF and downloads it."""
+    service = build("drive", "v3", credentials=CREDS)
+    request = service.files().export_media(fileId=file_id, mimeType="application/pdf")
+    with open(output_pdf_path, "wb") as pdf_file:
+        pdf_file.write(request.execute())
+    print(f" PDF saved: {output_pdf_path}")
 
-docx_file_id = upload_docx("invoice_filled.docx")
-export_pdf(docx_file_id, "invoice_filled.pdf")
+def docx_to_pdf(docx_path, pdf_output_path):
+    """Uploads DOCX, converts to PDF, and downloads it."""
+    file_id = upload_docx(docx_path)
+    convert_to_pdf(file_id, pdf_output_path)
+
+if __name__ == "__main__":
+    FILLED_DOCX = "filled_invoice.docx"
+    PDF_OUTPUT = "invoice.pdf"
+    docx_to_pdf(FILLED_DOCX, PDF_OUTPUT)
